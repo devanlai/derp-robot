@@ -8,7 +8,7 @@ CFLAGS = -Wall
 
 
 $(PROGRAM) : $(OBJS)
-	$(CC) $(LDFLAGS) $(OBJS) -o $(PROGRAM)
+	$(CC) $(LDFLAGS) $(LIBS) $(OBJS) -o $(PROGRAM)
 
 .PHONY: clean depend
 
