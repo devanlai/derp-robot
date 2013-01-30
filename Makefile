@@ -1,5 +1,5 @@
 PROGRAM = robot
-LIBS =
+LIBS = -lvncclient
 SRCS = main.c
 OBJS = $(SRCS:.c=.o)
 LDFLAGS =
