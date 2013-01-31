@@ -1,6 +1,10 @@
 #ifndef __ROBOT_H__
 #define __ROBOT_H__
 
+#define CHUMBY_WIDTH  320
+#define CHUMBY_HEIGHT 240
 
+#define CHUMBY_PX_SIZE 2
+#define CHUMBY_ROW_STRIDE CHUMBY_WIDTH*CHUMBY_PX_SIZE
 
 #endif
