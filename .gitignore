@@ -22,3 +22,6 @@
 # Backups
 *~
 *.bak
+
+# Don't try to track our local copy of the touch library
+ChumbyTouchFrame
