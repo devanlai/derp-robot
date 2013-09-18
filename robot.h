@@ -1,10 +1,7 @@
 #ifndef __ROBOT_H__
 #define __ROBOT_H__
 
-#define CHUMBY_WIDTH  320
-#define CHUMBY_HEIGHT 240
-
-#define CHUMBY_PX_SIZE 2
-#define CHUMBY_ROW_STRIDE CHUMBY_WIDTH*CHUMBY_PX_SIZE
+#define SWAP_32(X) ((((X) & 0xff) << 24) | (((X) & 0xff00) << 8) | (((X) & 0xff0000) >> 8)  | (((X) & 0xff000000) >> 24))
+#define SWAP_16(X) ((((X) & 0xff) << 8) | (((X) & 0xff00) >> 8))
 
 #endif

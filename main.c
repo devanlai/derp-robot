@@ -1,10 +1,15 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdint.h>
+
 #include <rfb/rfbclient.h>
 
 #include "robot.h"
-#include "ChumbyTouchFrame/screen.h"
-#include "ChumbyTouchFrame/touch.h"
+#include "frame.h"
+//#include "ChumbyTouchFrame/screen.h"
+//#include "ChumbyTouchFrame/touch.h"
+
+static ChumbyPixel* fb = NULL, *fb0 = NULL, *fb1 = NULL;
 
 static void updateChumbyFrameBuffer(rfbClient* client, int x, int y, int w, int h) {
 	if (x >= CHUMBY_WIDTH || y >= CHUMBY_HEIGHT) return;
@@ -13,16 +18,41 @@ static void updateChumbyFrameBuffer(rfbClient* client, int x, int y, int w, int 
 	if (y+h >= CHUMBY_HEIGHT)
 		h = CHUMBY_HEIGHT - 1 - y;
 
+	uint8_t bytes_per_pixel = client->format.bitsPerPixel / 8;
+	uint32_t i,j;
 
-	int i;
-	for (i=y; i < y+h; i++) {
-		memcpy(&framebuffer[CHUMBY_ROW_STRIDE*i], client->frameBuffer, CHUMBY_PX_SIZE*w);
+	for (j=y; j < y+h; j++) {
+		uint32_t row_offset = bytes_per_pixel * j * client->width;
+		for (i=x; i < x+w; i++) {
+			uint32_t col_offset = bytes_per_pixel * i;
+			uint32_t remote_pixel = *((uint32_t*)(client->frameBuffer + row_offset + col_offset));
+			if (client->si.format.bigEndian) {
+				if (client->format.bitsPerPixel == 16) {
+					remote_pixel = SWAP_16(remote_pixel);
+				} else if (client->format.bitsPerPixel == 32) {
+					remote_pixel = SWAP_32(remote_pixel);
+				}
+			}
+			uint32_t r,g,b;
+			//Extract the individual r/g/b values from the host-side
+			r = (remote_pixel >> client->format.redShift) & SWAP_16(client->format.redMax);
+			g = (remote_pixel >> client->format.greenShift) & SWAP_16(client->format.greenMax);
+			b = (remote_pixel >> client->format.blueShift) & SWAP_16(client->format.blueMax);
+
+			//Rescale to the local r/g/b maximums
+			r = (r << CHUMBY_RED_DEPTH) / SWAP_16(client->format.redMax);
+			g = (g << CHUMBY_GREEN_DEPTH) / SWAP_16(client->format.greenMax);
+			b = (b << CHUMBY_BLUE_DEPTH) / SWAP_16(client->format.blueMax);
+			fb[PIXEL_INDEX(i,j)] = rgb_to_pixel(r, g, b);
+		}
 	}
+	printf("Shifts: %d, %d, %d\r\n", client->format.redShift, client->format.greenShift, client->format.blueShift);
+	printf("Maxes (unswapped): %d, %d, %d\r\n", client->format.redMax, client->format.greenMax, client->format.blueMax);
+
 }
 
 static void refreshChumbyFrameBuffer(rfbClient* client) {
 	printf("Refreshing\r\n");
-	set_screen();
 }
 
 static void setServerHost(rfbClient *client, char *hostname) {
@@ -116,18 +146,26 @@ int main(int argc, char *argv[]) {
 	printf("VNC setup done\r\n");
 
 	printf("Initializing screen\r\n");
-    int okay = init_screen();
-	if (!okay) {
-		fprintf(stderr, "Couldn't open screen\r\n");
+	fb0 = init_framebuffer(FB0);
+	if (!fb0) {
+		fprintf(stderr, "Couldn't open screen fb0\r\n");
 		if (client)
 			rfbClientCleanup(client);
 		return 5;
 	}
+	/*
+	fb1 = init_framebuffer(FB1);
+	if (!fb1) {
+		fprintf(stderr, "Couldn't open screen fb1\r\n");
+		if (client)
+			rfbClientCleanup(client);
+		return 6;
+	}
+	*/
+	fill(fb0, rgb_to_pixel(0,0,0));
+	//fill(fb1, rgb_to_pixel(0,0,0));
 
-	char BLACK[2] = {0,0};
-	set_colour(BLACK);
-	set_screen();
-	
+	fb = fb0;
 
 	printf("Processing RFB messages\r\n");
 	//Process RFB messages
@@ -151,6 +189,14 @@ int main(int argc, char *argv[]) {
 
 	if (client)
 		rfbClientCleanup(client);
+
+	if (fb0) {
+		free_framebuffer(FB0);
+	}
+
+	if (fb1) {
+		free_framebuffer(FB1);
+	}
 
     return 0;
 }
