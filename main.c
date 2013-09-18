@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdint.h>
 
+#include <rfb/rfb.h>
 #include <rfb/rfbclient.h>
 
 #include "robot.h"
@@ -10,6 +11,17 @@
 //#include "ChumbyTouchFrame/touch.h"
 
 static ChumbyPixel* fb = NULL, *fb0 = NULL, *fb1 = NULL;
+
+static int is_big_endian(void)
+{
+    union {
+            uint32_t i;
+            char c[4];
+          }
+    bint = {0x01020304};
+                        
+    return bint.c[0] == 1; 
+}
 
 static void updateChumbyFrameBuffer(rfbClient* client, int x, int y, int w, int h) {
 	if (x >= CHUMBY_WIDTH || y >= CHUMBY_HEIGHT) return;
@@ -28,26 +40,32 @@ static void updateChumbyFrameBuffer(rfbClient* client, int x, int y, int w, int 
 			uint32_t remote_pixel = *((uint32_t*)(client->frameBuffer + row_offset + col_offset));
 			if (client->si.format.bigEndian) {
 				if (client->format.bitsPerPixel == 16) {
-					remote_pixel = SWAP_16(remote_pixel);
+					remote_pixel = rfbClientSwap16IfLE(remote_pixel);
 				} else if (client->format.bitsPerPixel == 32) {
-					remote_pixel = SWAP_32(remote_pixel);
+					remote_pixel = rfbClientSwap32IfLE(remote_pixel);
 				}
 			}
 			uint32_t r,g,b;
 			//Extract the individual r/g/b values from the host-side
-			r = (remote_pixel >> client->format.redShift) & SWAP_16(client->format.redMax);
-			g = (remote_pixel >> client->format.greenShift) & SWAP_16(client->format.greenMax);
-			b = (remote_pixel >> client->format.blueShift) & SWAP_16(client->format.blueMax);
+			r = (remote_pixel >> client->format.redShift) & client->format.redMax;
+			g = (remote_pixel >> client->format.greenShift) & client->format.greenMax;
+			b = (remote_pixel >> client->format.blueShift) & client->format.blueMax;
 
 			//Rescale to the local r/g/b maximums
-			r = (r << CHUMBY_RED_DEPTH) / SWAP_16(client->format.redMax);
-			g = (g << CHUMBY_GREEN_DEPTH) / SWAP_16(client->format.greenMax);
-			b = (b << CHUMBY_BLUE_DEPTH) / SWAP_16(client->format.blueMax);
-			fb[PIXEL_INDEX(i,j)] = rgb_to_pixel(r, g, b);
+			r = (r * CHUMBY_RED_MAX) / client->format.redMax;
+			g = (g * CHUMBY_GREEN_MAX) / client->format.greenMax;
+			b = (b * CHUMBY_BLUE_MAX) / client->format.blueMax;
+			fb[PIXEL_INDEX(i,j)] = rgb_to_pixel(r, g, b, 255);
 		}
 	}
+
+
+	printf("trueColour: %u\r\n", client->format.trueColour);
 	printf("Shifts: %d, %d, %d\r\n", client->format.redShift, client->format.greenShift, client->format.blueShift);
-	printf("Maxes (unswapped): %d, %d, %d\r\n", client->format.redMax, client->format.greenMax, client->format.blueMax);
+	printf("Maxes: %d, %d, %d\r\n",
+	       client->format.redMax,
+	       client->format.greenMax,
+	       client->format.blueMax);
 
 }
 
@@ -79,8 +97,11 @@ int main(int argc, char *argv[]) {
 	rfbClient *client = NULL;
 
 	//Create an RFB client with default settings, 16-bit color
+#ifdef FALCONWING
 	client = rfbGetClient(5, 3, 2);
-
+#else
+	client = rfbGetClient(8, 3, 4);
+#endif
 	//Configure host information
 	setServerHost(client, argv[1]);
 
@@ -162,8 +183,8 @@ int main(int argc, char *argv[]) {
 		return 6;
 	}
 	*/
-	fill(fb0, rgb_to_pixel(0,0,0));
-	//fill(fb1, rgb_to_pixel(0,0,0));
+	fill(fb0, rgb_to_pixel(0,0,0,255));
+	//fill(fb1, rgb_to_pixel(0,0,0,255));
 
 	fb = fb0;
 
@@ -183,7 +204,7 @@ int main(int argc, char *argv[]) {
 		}
 		if (count >= 2000) {
 			count = 0;
-			SendFramebufferUpdateRequest(client, 0, 0, 320, 240, FALSE);
+			SendFramebufferUpdateRequest(client, 0, 0, CHUMBY_WIDTH, CHUMBY_HEIGHT, FALSE);
 		}
 	}
 

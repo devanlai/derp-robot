@@ -19,9 +19,16 @@ static _Framebuffer _fb_map[CHUMBY_NUM_FB] = {
 	(_Framebuffer){.fd=-1, .ptr=NULL}
 };
 
-ChumbyPixel rgb_to_pixel(uint8_t red, uint8_t green, uint8_t blue) {
+#ifdef FALCONWING
+ChumbyPixel rgb_to_pixel(uint8_t red, uint8_t green, uint8_t blue, uint8_t alpha) {
 	return ((red&0xf8)<<8) + ((green&0xfc)<<3) + ((blue&0xf8)>>3);
 }
+#else
+ChumbyPixel rgb_to_pixel(uint8_t red, uint8_t green, uint8_t blue, uint8_t alpha) {
+	return (alpha << 24) | (red << 16) | (green << 8) | blue;
+}
+
+#endif
 
 ChumbyPixel* map_framebuffer(FBNum fb_no) {
 	if (fb_no < 0 || fb_no >= CHUMBY_NUM_FB) {
